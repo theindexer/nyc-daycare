@@ -1,0 +1,8 @@
+# Reasonix session state (local tooling, not part of the site)
+.reasonix/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*~
