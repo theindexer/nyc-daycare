@@ -4,8 +4,19 @@ An interactive map of NYC childcare providers — 3-K, Pre-K, Head Start, Early 
 Start, public-school infant care, toddler programs and private care — across all five
 boroughs.
 
+Intended to be a replacement to https://finder.nyc.gov/childcarenyc/locations?mView=map
+which has major performance issues preventing it from being usable.
+My guess is too much react rendering and not enough virtualization. Anyway, this thing uses
+the same API but is just a replacement front-end. FWIW, this is entirely vibe-coded.
+This paragraph is the only part I've edited manually.
+
+
 **No build step, no framework, no dependencies to install.** Plain HTML/CSS/JS with
 Leaflet from a CDN, served by a one-line static server.
+
+> Contributing or working on the code? Read **[AGENTS.md](AGENTS.md)** — it covers the
+> commands, the code's invariants, and the traps that fail silently. This file is for
+> people using and deploying the site.
 
 ## Running it
 
@@ -102,8 +113,6 @@ already present so GitHub serves the files as they are.
   marker highlights and reveals its entry in the list.
 - Responsive: side-by-side on desktop, an overlay panel behind a toggle button on mobile.
 
-## Tile usage policy
-
 ## Basemaps
 
 The map can run on either of two free, keyless tile sources. `BASEMAP` at the top of
@@ -154,40 +163,6 @@ causes are:
 Blocks are usually served as HTTP `200` with an error *image*, so the failure looks like a
 blank or half-drawn map rather than a network error. OSM describes enforcement as a
 "brownout" — only some tiles fail, which is why the map can look partly fine.
-
-### Compliance checklist
-
-Audited against the [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)
-(verified from a real browser session):
-
-| Requirement | How this project meets it |
-| --- | --- |
-| Exact tile URL, no subdomain | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` — no `{s}`, so requests go to `tile.openstreetmap.org` only. Measured: one hostname, no `a.`/`b.`/`c.`. |
-| HTTPS, not HTTP | HTTPS only. |
-| Visible licence attribution | `© OpenStreetMap contributors` linked to the copyright page, in Leaflet's bottom-right control. On mobile the sidebar overlay stops above it and it is layered on top, so it is never hidden. |
-| Valid `Referer` from web pages | Sent when served over HTTP (`http://localhost:8000/`). `strict-origin-when-cross-origin` is set in both the meta tag and the tile layer so it is never stripped. |
-| No restrictive `Referrer-Policy` | Explicitly permissive, as above. |
-| Do not bypass caches | No `Cache-Control: no-cache` or `Pragma: no-cache` is sent (verified: zero such requests). OSM's `max-age` + `ETag` are honoured by the browser cache. |
-| No bulk download or prefetch | No prefetch, pre-seed or "save for offline" feature. Only the tiles in the current viewport, plus Leaflet's default short-range look-ahead. Measured: 24 tiles for the initial view, ~4 per pan. |
-| Do not hard-code the tile URL | `TILE_URL` is a single constant, and `?tiles=<https-template>` overrides it at runtime without editing any file. Non-HTTPS or malformed values are rejected and fall back to the default. |
-| "Report a map issue" link | Links to <https://www.openstreetmap.org/fixthemap>. |
-| HTTP/2 or HTTP/3 | The browser multiplexes over h2 (observed). |
-
-**Not satisfied by design:** the *User-Agent* requirement for apps — from a web page the
-browser's own User-Agent is used, which the policy explicitly permits ("Browsers will use
-the browser's default User-Agent"). The *contact* recommendation is met by the sidebar
-footer once you set `CONTACT_URL`.
-
-The checklist above covers the **`osm` raster basemap and the automatic fallback**. On
-those paths the app is a well-behaved, low-volume client: one human viewing a
-neighbourhood-sized area, a few tiles at a time, served from cache.
-
-It is not a basis for scale, though. The policy prohibits heavy use and permits blocking
-without notice, and a *public* site is precisely the client that can outgrow those servers
-through no fault of its own. That is why the **default basemap is OpenFreeMap**, whose
-public instance explicitly permits unlimited use — see [Basemaps](#basemaps). If you would
-rather use a paid provider (Stadia, MapTiler, Thunderforest) or self-host, `?tiles=` and
-the `OPENFREEMAP_STYLE` constant are the two knobs to turn.
 
 ## Data source
 
@@ -270,11 +245,9 @@ others are only the agency's search page:
 | OCFS | 7,028 | 5,847 |
 | DOHMH | 4,942 | 1,087 |
 
-So the popup labels them accordingly — `OCFS inspections` only when the URL really points
-at that provider (`…/GetProgramInfo/880314`, or `?facilityBIN=…`), otherwise
-`Search OCFS records`. `isRecordSpecificLink()` in `app.js` decides this from the URL
-shape (a query parameter, or an id as the last path segment); it was checked against all
-18,904 URLs in the dataset and agrees with the literal agency patterns on every one.
+The popup labels these two cases differently; see [AGENTS.md](AGENTS.md) for the rule.
+
+### Duplicate coordinates
 
 An address is geocoded once, so all of a daycare's programme registrations land on the
 same point — and often on exactly the same coordinate:
@@ -293,30 +266,6 @@ the 51-record point spans 13 different names across 3 different addresses, so gr
 also acts as a sanity check on the data — a pin reading "51 programs at this address" is
 a data problem, not a real cluster.
 
-### How pins are grouped
-
-Pins are clustered **by proximity**, not by rounding coordinates to a grid
-(`buildGroups()` in `app.js`). Rounding looks simpler but breaks on this data: the five
-records at `941 WASHINGTON AVE, BROOKLYN 11225` are stored at differing precision, so
-four land on `40.6663200, -73.9612470` and the fifth on `40.6663208, -73.9612503` — about
-0.3 m away. Rounding to 6 decimals splits those into `4 + 1`, and rounding to 4 decimals
-splits them again, because the two points straddle the rounding boundary.
-
-Measuring the data shows a clean separation:
-
-| Distance between a pair of records | Share the same address |
-| --- | --- |
-| 0–1 m | 84.9% (31,003 of 36,521) |
-| 1–2 m | **no pairs exist at all** |
-| 2–5 m | 0% (4 pairs) |
-| 5–10 m | 0% (375 pairs) |
-
-Every same-address pair is **under a metre** apart (median spread 0.07 m), and no two
-different addresses are closer than ~2 m. `GROUP_RADIUS_M` is therefore set to `4` metres
-— comfortably above the jitter, well below the point where distinct addresses start
-merging. Clustering uses union-find over a spatial hash, so it stays linear; grouping
-2,000 records takes roughly 10 ms.
-
 ## Files
 
 | File | Purpose |
@@ -325,61 +274,4 @@ merging. Clustering uses union-find over a spatial hash, so it stays linear; gro
 | `styles.css` | Layout and styling |
 | `app.js` | All logic: query building, fetching, map/marker and list rendering |
 | `serve.sh` | Serves this folder on `http://localhost` (needs only Python 3) |
-
-## Tuning
-
-At the top of `app.js`:
-
-| Constant | Default | Meaning |
-| --- | --- | --- |
-| `MAX_FEATURES` | `2000` | Providers loaded per map view (the service's page size) |
-| `PAGE_SIZE` | `2000` | Records per request; must not exceed `maxRecordCount` |
-| `DEBOUNCE_MS` | `400` | Wait after pan/zoom before querying |
-| `CARE_COLORS` | — | Marker colour per care type |
-
-`MAX_FEATURES` is the main trade-off: raising it shows more providers when zoomed out at
-the cost of more requests, more data and a heavier first paint.
-
-### Why the results list is built the way it is
-
-The list is **virtualized**: only the rows near the scroll position exist in the DOM. A
-view can hold 2,000 providers, and rendering them all meant ~16,900 elements. That cost
-~240 ms of main-thread work per filter change — the freeze felt when dragging the age
-slider — and, worse, got walked by every password-manager extension on the page (a Firefox
-profile showed `NodeFilter.acceptNode`, i.e. a `TreeWalker` sweep, on the stack for ~1.2 s
-against a tab whose own code accounted for under 1%).
-
-| | all rows | virtualized |
-| --- | --- | --- |
-| Rows in the DOM | 2,000 | **~11–19** |
-| Nodes in `#result-list` | 16,898 | **~90** |
-| Nodes in the whole page | ~18,000 | **~1,000** |
-| Longest main-thread task on a filter change | 242 ms | **0 ms** (no long task) |
-
-How it works, in `app.js`:
-
-- `#list-sizer` is a spacer whose height is `rows × ROW_HEIGHT`; it alone defines the
-  scroll range.
-- `#list-rows` holds the rendered window, slid to the first row with
-  `transform: translateY(start × ROW_HEIGHT)`.
-- `renderWindow()` derives the window from `scrollTop` and the viewport using plain index
-  arithmetic, plus `ROW_OVERSCAN` rows each side.
-
-Things to know before changing it:
-
-- **Rows are a fixed height on purpose.** `ROW_HEIGHT` is the single source of truth and is
-  written into `--row-height`, which the stylesheet reads — so the two cannot drift. Index
-  arithmetic only works because every row is exactly that tall, which is why card text is
-  clipped with an ellipsis rather than allowed to wrap. The popup carries the full detail.
-- **A row outside the window does not exist**, so anything that looks one up by DOM must go
-  through `rowIndex()` and call `revealRow()` first. `setActive()` does this; skipping it
-  was exactly the bug that made me abandon chunked rendering earlier (`rendered:344,
-  inView:false`).
-- **`renderList()` consumes `pendingScroll`** by moving the scroll position to the selected
-  row *before* rendering, then highlighting it — order matters.
-- **Card text is escaped.** Rows are assembled as HTML, so `escapeHtml()` is load-bearing;
-  provider names and addresses come from the data service.
-- **Clicks are delegated** to one listener on `#result-list`, since rows are replaced
-  wholesale and only a handful exist at a time.
-- Clicking a pin that covers several programmes deliberately does **not** change the
-  selection — the popup lists them and the user picks one.
+| `AGENTS.md` | Engineering notes for whoever changes the code — commands, invariants, traps |
