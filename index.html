@@ -55,17 +55,25 @@
         </div>
       </fieldset>
 
-      <div class="field">
-        <label class="field-label" for="age-slider">Child&rsquo;s age</label>
-        <input id="age-slider" type="range" min="0" max="71" step="1" value="36" disabled>
-        <div class="age-readout">
-          <output id="age-value">3 years</output>
-          <label class="inline-check">
-            <input id="age-any" type="checkbox" checked> Any age
+      <fieldset class="field">
+        <legend class="field-label">Child&rsquo;s age</legend>
+        <div class="segmented" role="radiogroup" aria-label="Filter by child&rsquo;s age">
+          <label class="segmented-option">
+            <input type="radio" name="age-mode" value="any" checked>
+            <span>Any age</span>
+          </label>
+          <label class="segmented-option">
+            <input type="radio" name="age-mode" value="specific">
+            <span>Specific age</span>
           </label>
         </div>
-        <p class="hint">Shows providers who accept a child of exactly this age.</p>
-      </div>
+        <div id="age-specific" class="age-specific" hidden>
+          <input id="age-slider" type="range" min="0" max="71" step="1" value="36"
+                 aria-label="Child&rsquo;s age">
+          <output id="age-value" for="age-slider">3 years</output>
+          <p class="hint">Shows providers who accept a child of exactly this age.</p>
+        </div>
+      </fieldset>
 
       <div class="field">
         <label class="field-label" for="borough-select">Borough</label>
@@ -100,7 +108,12 @@
         Providers <span id="result-count" class="count">0</span>
       </h2>
       <p id="results-note" class="note" hidden></p>
-      <div id="result-list"></div>
+      <div id="result-list">
+        <!-- The list is virtualized: #list-sizer gives the scroll range and
+             #list-rows holds only the rows currently near the viewport. -->
+        <div id="list-sizer"></div>
+        <div id="list-rows"></div>
+      </div>
       <p id="results-empty" class="empty" hidden>No providers match in this map view.</p>
     </section>
 

@@ -53,16 +53,12 @@ The site is plain static files, so GitHub Pages serves it directly.
    → Branch `main`, folder `/ (root)` → Save. The site appears at
    `https://<you>.github.io/<repo>/` within a minute or two.
 
-3. **Set your contact link.** `CONTACT_URL` in `app.js` is a placeholder containing
-   `YOUR-USERNAME`. Replace it with your repository's Issues page:
-
-   ```js
-   var CONTACT_URL = 'https://github.com/<you>/<repo>/issues';
-   ```
-
-   While it is still the placeholder the link stays hidden, so a dead link can never ship.
+3. **Contact link — already set.** `CONTACT_URL` in `app.js` points at
+   `https://github.com/theindexer/nyc-daycare/issues`, which the sidebar footer links to.
    The tile policy asks public sites to be contactable so OpenStreetMap can reach you
-   before taking any action, so this is worth setting.
+   before taking any action. If you ever fork or rename the repo, update this constant —
+   while it contains `YOUR-USERNAME` the link hides itself rather than shipping a dead
+   `href="#"`.
 
 No build step, no Actions workflow and no `gh-pages` branch are needed — `.nojekyll` is
 already present so GitHub serves the files as they are.
@@ -93,7 +89,9 @@ already present so GitHub serves the files as they are.
   what is loaded):
   - Care type (Pre-K, 3-K, Head Start, Early Head Start, Infant Care, 2-K & Other Toddler, Private)
   - Setting (Center, Home-based, School, Not specified)
-  - Child's age — a slider in months ("show me providers who accept an 18-month-old")
+  - Child's age — an "Any age / Specific age" toggle; choosing *Specific age* reveals a
+    month slider ("show me providers who accept an 18-month-old"). The slider exists only
+    while it applies, so no control is ever greyed out.
   - Borough and community district
 - **Results list** beside the map, with a text box that filters the providers already
   loaded in the view by name, address or ZIP.
@@ -245,7 +243,38 @@ These were verified against the live service and are worth knowing if you change
 - Ages are stored in **months** (`AGEMIN` 0–48, `AGEMAX` 23–71), with the human-readable
   `AGEMIN_YEAR` / `AGEMAX_YEAR` used for display.
 
-### Duplicate coordinates
+### Inspection links: OCFS or DOHMH, not both
+
+Which regulator a provider links to is determined by its setting type, not chosen by the
+app. The two fields are effectively mutually exclusive — only **7 of 20,071** records
+carry both, and those are one provider whose OCFS link is just the agency's front page.
+
+| Setting | OCFS | DOHMH | neither |
+| --- | --- | --- | --- |
+| Home (family day care) | 12,826 | 0 | 0 |
+| Center | 42 | 5,550 | 0 |
+| School | 0 | 472 | 1,081 |
+| (blank) | 0 | 0 | 93 |
+
+That mirrors how childcare is actually regulated in New York: home-based family and group
+family day care is licensed by the **state** Office of Children and Family Services, while
+**city** DOHMH permits and inspects centres. School-age programmes have no link at all in
+about two thirds of cases. The 42 centre records pointing at OCFS are genuine outliers
+(all `Private`).
+
+**Not all of these links are inspection records.** Some point at the provider's own record;
+others are only the agency's search page:
+
+| Agency | Record-specific link | Search page only |
+| --- | --- | --- |
+| OCFS | 7,028 | 5,847 |
+| DOHMH | 4,942 | 1,087 |
+
+So the popup labels them accordingly — `OCFS inspections` only when the URL really points
+at that provider (`…/GetProgramInfo/880314`, or `?facilityBIN=…`), otherwise
+`Search OCFS records`. `isRecordSpecificLink()` in `app.js` decides this from the URL
+shape (a query parameter, or an id as the last path segment); it was checked against all
+18,904 URLs in the dataset and agrees with the literal agency patterns on every one.
 
 An address is geocoded once, so all of a daycare's programme registrations land on the
 same point — and often on exactly the same coordinate:
@@ -310,3 +339,47 @@ At the top of `app.js`:
 
 `MAX_FEATURES` is the main trade-off: raising it shows more providers when zoomed out at
 the cost of more requests, more data and a heavier first paint.
+
+### Why the results list is built the way it is
+
+The list is **virtualized**: only the rows near the scroll position exist in the DOM. A
+view can hold 2,000 providers, and rendering them all meant ~16,900 elements. That cost
+~240 ms of main-thread work per filter change — the freeze felt when dragging the age
+slider — and, worse, got walked by every password-manager extension on the page (a Firefox
+profile showed `NodeFilter.acceptNode`, i.e. a `TreeWalker` sweep, on the stack for ~1.2 s
+against a tab whose own code accounted for under 1%).
+
+| | all rows | virtualized |
+| --- | --- | --- |
+| Rows in the DOM | 2,000 | **~11–19** |
+| Nodes in `#result-list` | 16,898 | **~90** |
+| Nodes in the whole page | ~18,000 | **~1,000** |
+| Longest main-thread task on a filter change | 242 ms | **0 ms** (no long task) |
+
+How it works, in `app.js`:
+
+- `#list-sizer` is a spacer whose height is `rows × ROW_HEIGHT`; it alone defines the
+  scroll range.
+- `#list-rows` holds the rendered window, slid to the first row with
+  `transform: translateY(start × ROW_HEIGHT)`.
+- `renderWindow()` derives the window from `scrollTop` and the viewport using plain index
+  arithmetic, plus `ROW_OVERSCAN` rows each side.
+
+Things to know before changing it:
+
+- **Rows are a fixed height on purpose.** `ROW_HEIGHT` is the single source of truth and is
+  written into `--row-height`, which the stylesheet reads — so the two cannot drift. Index
+  arithmetic only works because every row is exactly that tall, which is why card text is
+  clipped with an ellipsis rather than allowed to wrap. The popup carries the full detail.
+- **A row outside the window does not exist**, so anything that looks one up by DOM must go
+  through `rowIndex()` and call `revealRow()` first. `setActive()` does this; skipping it
+  was exactly the bug that made me abandon chunked rendering earlier (`rendered:344,
+  inView:false`).
+- **`renderList()` consumes `pendingScroll`** by moving the scroll position to the selected
+  row *before* rendering, then highlighting it — order matters.
+- **Card text is escaped.** Rows are assembled as HTML, so `escapeHtml()` is load-bearing;
+  provider names and addresses come from the data service.
+- **Clicks are delegated** to one listener on `#result-list`, since rows are replaced
+  wholesale and only a handful exist at a time.
+- Clicking a pin that covers several programmes deliberately does **not** change the
+  selection — the popup lists them and the user picks one.

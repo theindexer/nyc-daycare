@@ -50,7 +50,7 @@ var SHARED_ATTRIBUTION =
  * public sites to be contactable so they can be reached before any block.
  * Repoint this at your own repository's Issues page before deploying; the link
  * stays hidden while it is still the placeholder. See README, "Deploying". */
-var CONTACT_URL = 'https://github.com/YOUR-USERNAME/nyc-daycare/issues';
+var CONTACT_URL = 'https://github.com/theindexer/nyc-daycare/issues';
 
 var PAGE_SIZE = 2000;     // server maxRecordCount for this layer
 var MAX_FEATURES = 2000;  // cap per map view, keeps the first paint snappy
@@ -674,60 +674,121 @@ function updateRadii() {
   if (activeMarker && !isBadgeMarker(activeMarker)) activeMarker.setRadius(radius + 3);
 }
 
-function renderList() {
-  var fragment = document.createDocumentFragment();
-
-  state.filtered.forEach(function (p) {
-    var card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'card';
-    card.dataset.fid = String(p.fid);
-    if (p.fid === state.activeFid) card.classList.add('is-active');
-
-    var name = document.createElement('span');
-    name.className = 'card-name';
-    var swatch = document.createElement('span');
-    swatch.className = 'swatch';
-    swatch.style.background = colorFor(p);
-    name.appendChild(swatch);
-    name.appendChild(document.createTextNode(p.NAME || 'Unnamed provider'));
-    card.appendChild(name);
-
-    var address = document.createElement('span');
-    address.className = 'card-line';
-    address.textContent = fullAddress(p) || 'Address not listed';
-    card.appendChild(address);
-
-    var tags = document.createElement('span');
-    tags.className = 'card-tags';
-    if (p.CARETYPE_GROUP) tags.appendChild(tag(p.CARETYPE_GROUP));
-    tags.appendChild(tag(settingLabel(p.SETTINGTYPE_STD)));
-    if (ageRange(p)) tags.appendChild(tag(ageRange(p)));
-    var group = groupForFid.get(p.fid);
-    if (group && group.providers.length > 1) {
-      tags.appendChild(tag(group.providers.length + ' at this address'));
-    }
-    card.appendChild(tags);
-
-    card.addEventListener('click', function () { focusProvider(p.fid); });
-    fragment.appendChild(card);
+function escapeHtml(value) {
+  return String(value === null || value === undefined ? '' : value).replace(/[&<>"']/g, function (character) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character];
   });
+}
 
-  dom.resultList.textContent = '';
-  dom.resultList.appendChild(fragment);
+/* Provider text is escaped: names and addresses come from the data service and
+   go into an HTML string, so they must not be able to inject markup. */
+function cardHtml(p) {
+  var tags = [];
+  function pushTag(text) { tags.push('<span class="tag">' + escapeHtml(text) + '</span>'); }
+
+  if (p.CARETYPE_GROUP) pushTag(p.CARETYPE_GROUP);
+  pushTag(settingLabel(p.SETTINGTYPE_STD));
+  var ages = ageRange(p);
+  if (ages) pushTag(ages);
+  var group = groupForFid.get(p.fid);
+  if (group && group.providers.length > 1) pushTag(group.providers.length + ' at address');
+
+  return '<button type="button" class="card' + (p.fid === state.activeFid ? ' is-active' : '') +
+    '" data-fid="' + p.fid + '">' +
+    '<span class="card-name"><span class="swatch" style="background:' + colorFor(p) + '"></span>' +
+    escapeHtml(p.NAME || 'Unnamed provider') + '</span>' +
+    '<span class="card-line">' + escapeHtml(fullAddress(p) || 'Address not listed') + '</span>' +
+    '<span class="card-tags">' + tags.join('') + '</span>' +
+    '</button>';
+}
+
+/* The list is virtualized: only the rows near the scroll position exist in the
+ * DOM. A view can hold 2,000 providers, and rendering them all meant ~16,900
+ * elements, which cost ~240 ms of main-thread work per filter change (measured)
+ * — and, more expensively, got walked by every password-manager extension on the
+ * page. With a window of visible rows plus a small overscan the DOM is ~150
+ * elements instead.
+ *
+ * Rows are a fixed height so the offset of row N is simply N * ROW_HEIGHT; that
+ * avoids a measurement pass and any scroll-position drift. Text that does not
+ * fit is clipped — the popup carries the full detail. */
+var ROW_HEIGHT = 82;
+
+/* Rows rendered above and below the viewport, so a fast scroll does not flash
+ * empty space. */
+var ROW_OVERSCAN = 8;
+
+var listStart = 0;
+var listEnd = 0;
+var listScrollQueued = false;
+
+/* Rows are replaced wholesale, so the previous scroll offset can point past the
+ * end of a shorter list. */
+function clampListScroll() {
+  var max = Math.max(0, dom.listSizer.offsetHeight - dom.resultList.clientHeight);
+  if (dom.resultList.scrollTop > max) dom.resultList.scrollTop = max;
+}
+
+function rowIndex(fid) {
+  if (fid === null) return -1;
+  for (var i = 0; i < state.filtered.length; i++) {
+    if (state.filtered[i].fid === fid) return i;
+  }
+  return -1;
+}
+
+/* Paint the slice of rows around the current scroll position. */
+function renderWindow() {
+  var items = state.filtered;
+  var viewport = dom.resultList.clientHeight || ROW_HEIGHT * 12;
+  var scrollTop = dom.resultList.scrollTop;
+
+  var start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - ROW_OVERSCAN);
+  var end = Math.min(items.length, Math.ceil((scrollTop + viewport) / ROW_HEIGHT) + ROW_OVERSCAN);
+  listStart = start;
+  listEnd = end;
+
+  var html = '';
+  for (var i = start; i < end; i++) html += cardHtml(items[i]);
+  dom.listRows.innerHTML = html;
+  dom.listRows.style.transform = 'translateY(' + (start * ROW_HEIGHT) + 'px)';
+}
+
+function onListScroll() {
+  if (listScrollQueued) return;
+  listScrollQueued = true;
+  requestAnimationFrame(function () {
+    listScrollQueued = false;
+    renderWindow();
+  });
+}
+
+function renderList() {
+  var items = state.filtered;
+  dom.listSizer.style.height = (items.length * ROW_HEIGHT) + 'px';
+
+  if (state.pendingScroll && state.activeFid !== null) {
+    // The selected row may sit outside the current window, so move the scroll
+    // position to it *before* rendering, otherwise there is no element to
+    // highlight or scroll to.
+    var index = rowIndex(state.activeFid);
+    if (index >= 0) {
+      var viewport = dom.resultList.clientHeight || ROW_HEIGHT * 12;
+      var top = index * ROW_HEIGHT;
+      if (top < dom.resultList.scrollTop || top + ROW_HEIGHT > dom.resultList.scrollTop + viewport) {
+        dom.resultList.scrollTop = Math.max(0, top - Math.floor((viewport - ROW_HEIGHT) / 2));
+      }
+    }
+  }
+
+  clampListScroll();
+  renderWindow();
 
   if (state.pendingScroll && state.activeFid !== null) {
     var active = findCard(state.activeFid);
     if (active) active.scrollIntoView({ block: 'nearest' });
   }
   state.pendingScroll = false;
-}
-
-function tag(text) {
-  var span = document.createElement('span');
-  span.className = 'tag';
-  span.textContent = text;
-  return span;
 }
 
 function fullAddress(p) {
@@ -903,8 +964,8 @@ function detailNode(p) {
   links.className = 'detail-links';
   addLink(links, 'Website', p.DOE_WEBSITE);
   addLink(links, 'MySchools', p.MYSCHOOLS_URL);
-  addLink(links, 'OCFS inspections', p.OCFS_INSPECTURL);
-  addLink(links, 'DOHMH inspections', p.DOHMH_INSPECTION_URL);
+  addLink(links, inspectionLabel('OCFS', p.OCFS_INSPECTURL), p.OCFS_INSPECTURL);
+  addLink(links, inspectionLabel('DOHMH', p.DOHMH_INSPECTION_URL), p.DOHMH_INSPECTION_URL);
   addLink(links, 'About this care type', p.CARETYPE_URL);
   addLink(links, 'Google Maps directions',
     'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(p.lat + ',' + p.lng));
@@ -960,6 +1021,27 @@ function safeUrl(url) {
   }
 }
 
+/* The inspection fields point at the provider's own record for some providers
+ * and at the agency's bare search page for others — roughly 45% of the OCFS
+ * links are the latter. Detect the difference so a search form is not labelled
+ * as an inspection record. A record link carries either a query parameter
+ * (?facilityBIN=…) or an id as its last path segment (…/GetProgramInfo/880314). */
+function isRecordSpecificLink(url) {
+  if (!url) return false;
+  try {
+    var parsed = new URL(url, window.location.href);
+    if (parsed.search && parsed.search.length > 1) return true;
+    var segments = parsed.pathname.split('/').filter(Boolean);
+    return /\d{3,}/.test(segments[segments.length - 1] || '');
+  } catch (error) {
+    return false;
+  }
+}
+
+function inspectionLabel(agency, url) {
+  return isRecordSpecificLink(url) ? agency + ' inspections' : 'Search ' + agency + ' records';
+}
+
 function addLink(container, label, url) {
   var href = safeUrl(url);
   if (!href) return;
@@ -992,11 +1074,26 @@ function setActive(fid) {
   var previous = dom.resultList.querySelector('.card.is-active');
   if (previous) previous.classList.remove('is-active');
 
+  // The row may be outside the virtualized window, in which case it does not
+  // exist yet and there is nothing to highlight.
+  revealRow(fid);
+
   var card = findCard(fid);
   if (card) {
     card.classList.add('is-active');
     card.scrollIntoView({ block: 'nearest' });
   }
+}
+
+/* Scroll a row into the rendered window if it currently falls outside it. */
+function revealRow(fid) {
+  var index = rowIndex(fid);
+  if (index < 0) return;
+  if (index >= listStart && index < listEnd) return;
+
+  var viewport = dom.resultList.clientHeight || ROW_HEIGHT * 12;
+  dom.resultList.scrollTop = Math.max(0, index * ROW_HEIGHT - Math.floor((viewport - ROW_HEIGHT) / 2));
+  renderWindow();
 }
 
 function findCard(fid) {
@@ -1146,6 +1243,24 @@ function syncCdSelect() {
   });
 }
 
+/* The age filter is a two-way choice, so the slider is present only when it
+ * applies: no disabled control, and "Any age" is an explicit default rather
+ * than the unchecked side of a checkbox. */
+function ageMode() {
+  var chosen = document.querySelector('input[name="age-mode"]:checked');
+  return chosen ? chosen.value : 'any';
+}
+
+function setAgeMode(mode) {
+  Array.prototype.forEach.call(dom.ageRadioInputs, function (radio) {
+    radio.checked = radio.value === mode;
+  });
+  var specific = mode === 'specific';
+  dom.ageSpecific.hidden = !specific;
+  dom.ageValue.textContent = formatMonths(Number(dom.ageSlider.value));
+  state.ageMonths = specific ? Number(dom.ageSlider.value) : null;
+}
+
 function resetFilters() {
   state.careTypes = new Set(CARE_TYPES);
   state.settings = new Set(SETTINGS.map(function (s) { return s.value; }));
@@ -1157,8 +1272,7 @@ function resetFilters() {
   Array.prototype.forEach.call(dom.caretypeControls.querySelectorAll('input'), function (b) { b.checked = true; });
   Array.prototype.forEach.call(dom.settingControls.querySelectorAll('input'), function (b) { b.checked = true; });
   dom.textFilter.value = '';
-  dom.ageAny.checked = true;
-  dom.ageSlider.disabled = true;
+  setAgeMode('any');
   dom.boroughSelect.value = '';
   syncCdSelect();
   syncLegend();
@@ -1192,8 +1306,9 @@ function init() {
   dom.sidebarToggle = $('sidebar-toggle');
   dom.caretypeControls = $('caretype-controls');
   dom.settingControls = $('setting-controls');
+  dom.ageRadioInputs = document.querySelectorAll('input[name="age-mode"]');
+  dom.ageSpecific = $('age-specific');
   dom.ageSlider = $('age-slider');
-  dom.ageAny = $('age-any');
   dom.ageValue = $('age-value');
   dom.boroughSelect = $('borough-select');
   dom.cdField = $('cd-field');
@@ -1204,6 +1319,8 @@ function init() {
   dom.resultCount = $('result-count');
   dom.resultsNote = $('results-note');
   dom.resultList = $('result-list');
+  dom.listSizer = $('list-sizer');
+  dom.listRows = $('list-rows');
   dom.resultsEmpty = $('results-empty');
   dom.mapError = $('map-error');
   dom.mapErrorText = $('map-error-text');
@@ -1224,7 +1341,10 @@ function init() {
 
   buildFilterControls();
   buildLegend();
-  dom.ageValue.textContent = formatMonths(Number(dom.ageSlider.value));
+  setAgeMode('any');
+
+  // Single source of truth for the row height: the stylesheet reads this back.
+  document.documentElement.style.setProperty('--row-height', ROW_HEIGHT + 'px');
 
   map = L.map('map', {
     minZoom: 10,
@@ -1248,15 +1368,17 @@ function init() {
   map.on('dragend zoomend', function () { scheduleLoad(false); });
   map.on('zoomend', updateRadii);
 
-  dom.ageAny.addEventListener('change', function () {
-    dom.ageSlider.disabled = dom.ageAny.checked;
-    state.ageMonths = dom.ageAny.checked ? null : Number(dom.ageSlider.value);
-    scheduleLoad(true);
+  Array.prototype.forEach.call(dom.ageRadioInputs, function (radio) {
+    radio.addEventListener('change', function () {
+      if (!radio.checked) return;
+      setAgeMode(radio.value);
+      scheduleLoad(true);
+    });
   });
 
   dom.ageSlider.addEventListener('input', function () {
     dom.ageValue.textContent = formatMonths(Number(dom.ageSlider.value));
-    if (!dom.ageAny.checked) {
+    if (ageMode() === 'specific') {
       state.ageMonths = Number(dom.ageSlider.value);
       scheduleLoad(false);
     }
@@ -1283,6 +1405,20 @@ function init() {
   });
 
   dom.resetFilters.addEventListener('click', resetFilters);
+
+  // One delegated listener rather than one per card: the list is rendered as
+  // raw HTML and only the visible window of rows exists at any moment.
+  dom.resultList.addEventListener('click', function (event) {
+    var card = event.target && event.target.closest ? event.target.closest('.card') : null;
+    if (card && dom.resultList.contains(card)) focusProvider(Number(card.getAttribute('data-fid')));
+  });
+
+  dom.resultList.addEventListener('scroll', onListScroll);
+
+  // A wider or taller window means more rows are needed.
+  window.addEventListener('resize', function () {
+    if (state.filtered.length) renderWindow();
+  });
 
   Array.prototype.forEach.call(document.querySelectorAll('[data-toggle-all]'), function (button) {
     button.addEventListener('click', function () {

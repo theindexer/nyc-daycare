@@ -7,6 +7,9 @@
   --text: #1c2024;
   --muted: #5f6874;
   --accent: #1d4ed8;
+  /* Row height for the virtualized results list. app.js sets this at start-up
+     from ROW_HEIGHT so the two can never drift apart. */
+  --row-height: 82px;
   --accent-soft: #e8eefc;
   --danger: #b42318;
   --sidebar-width: 380px;
@@ -206,27 +209,68 @@ input[type="range"]:focus-visible {
 }
 
 input[type="range"] { width: 100%; accent-color: var(--accent); }
-input[type="range"]:disabled { opacity: .45; }
 
-.age-readout {
+/* Two-way segmented choice. Backed by real radios so arrow keys work and the
+   current choice is exposed to assistive tech; the input itself is invisible
+   but stretched over the whole segment so the entire target is clickable. */
+.segmented {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 2px;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }
 
-#age-value { font-size: 12px; font-weight: 600; }
-
-.inline-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
+.segmented-option {
+  position: relative;
+  flex: 1 1 0;
   cursor: pointer;
 }
+
+.segmented-option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.segmented-option span {
+  display: block;
+  padding: 5px 6px;
+  font-size: 12.5px;
+  text-align: center;
+  color: var(--muted);
+  border-radius: 4px;
+}
+
+.segmented-option:hover span { color: var(--text); }
+
+.segmented-option input:checked + span {
+  font-weight: 600;
+  color: var(--text);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .14);
+}
+
+.segmented-option input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.age-specific { margin-top: 10px; }
+
+#age-value {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.age-specific .hint { margin-top: 6px; }
 
 .checklist {
   display: flex;
@@ -342,14 +386,29 @@ input[type="range"]:disabled { opacity: .45; }
 }
 
 #result-list {
+  position: relative;
   flex: 1 1 auto;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
+/* Full-height spacer: it alone determines the scroll range. */
+#list-sizer { width: 1px; }
+
+/* The rendered window, slid down to the first visible row. Absolute so it adds
+   no height of its own; the sizer owns the scroll height. */
+#list-rows {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  will-change: transform;
+}
+
 .card {
   display: block;
   width: 100%;
+  height: var(--row-height);
   padding: 9px 16px;
   font: inherit;
   text-align: left;
@@ -359,6 +418,10 @@ input[type="range"]:disabled { opacity: .45; }
   border-top: 1px solid var(--border);
   border-left: 3px solid transparent;
   cursor: pointer;
+  /* Rows are a fixed height so the virtualized list can place them by plain
+     index arithmetic (offset = index * --row-height). Text that does not fit is
+     clipped rather than wrapped; the popup carries the full detail. */
+  overflow: hidden;
 }
 
 .card:hover { background: var(--bg); }
@@ -369,29 +432,39 @@ input[type="range"]:disabled { opacity: .45; }
 }
 
 .card-name {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
+  display: block;
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.card-name .swatch { margin-top: 4px; align-self: flex-start; }
+.card-name .swatch { display: inline-block; vertical-align: -1px; margin-right: 6px; }
 
 .card-line {
   margin-top: 1px;
   font-size: 12px;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* Block + inline-block tags rather than flex, so an over-long tag row ends in
+   an ellipsis instead of being sliced mid-word. */
 .card-tags {
   margin-top: 4px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tag {
+  display: inline-block;
+  margin-right: 4px;
+  white-space: nowrap;
   padding: 1px 6px;
   font-size: 10.5px;
   line-height: 1.5;
