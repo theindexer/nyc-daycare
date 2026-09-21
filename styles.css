@@ -696,11 +696,26 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
        measured at runtime into --attribution-height. */
     bottom: var(--attribution-height, 34px);
     width: min(88vw, var(--sidebar-width));
-    box-shadow: 0 0 0 100vmax rgba(16, 24, 40, .28);
     transform: translateX(-102%);
     transition: transform .18s ease-out;
   }
 
+  /* The dim over the map. Deliberately a fixed scrim rather than a
+     `box-shadow: 0 0 0 100vmax` on #sidebar: a shadow is anchored to its
+     element, so translating the sidebar off-screen dragged the dim over the
+     whole map — it darkened the view permanently, closed or open. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(16, 24, 40, .28);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease-out;
+  }
+
   body.sidebar-open #sidebar { transform: none; }
+  body.sidebar-open::before { opacity: 1; }
   #filters { max-height: 50%; }
 }

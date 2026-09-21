@@ -124,6 +124,24 @@ fallback being blocked:
 - `referrerPolicy: 'strict-origin-when-cross-origin'` left in place, in both the meta tag and
   the tile layer
 
+### Inspection link labels
+
+`OCFS_INSPECTURL` and `DOHMH_INSPECTION_URL` do not always point at the provider's own
+record — about 45% of the OCFS links are only the agency's search page.
+`isRecordSpecificLink()` decides which from the URL shape (a query parameter, or an id as
+the last path segment) and `inspectionLabel()` writes `OCFS inspections` only for a real
+record, otherwise `Search OCFS records`. Do not hard-code agency-specific URL paths: the
+heuristic was checked against all 18,904 URLs in the dataset and agrees with the literal
+patterns on every one.
+
+### The mobile map dim is a fixed scrim, not a shadow
+
+While the sidebar is open on narrow screens, `body::before` dims the map (z-index 1100 —
+below the sidebar at 1150 and below the attribution at 1200, so the OSM credit stays
+legible). It is deliberately **not** a `box-shadow` on `#sidebar`: a shadow is anchored to
+its element, so translating the sidebar off-screen (`translateX(-102%)`) dragged the dim
+across the whole viewport and darkened the map permanently, open or closed.
+
 ## Tuning
 
 All at the top of `app.js` unless noted.
