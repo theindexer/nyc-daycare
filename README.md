@@ -7,7 +7,7 @@ boroughs.
 Intended to be a replacement to https://finder.nyc.gov/childcarenyc/locations?mView=map
 which has major performance issues preventing it from being usable.
 My guess is too much react rendering and not enough virtualization. Anyway, this thing uses
-the same API but is just a replacement front-end. FWIW, this is entirely vibe-coded.
+the same API but is just a replacement front-end. FWIW, this is entirely vibe-coded (not one-shot!).
 This paragraph is the only part I've edited manually.
 
 
@@ -237,7 +237,7 @@ family day care is licensed by the **state** Office of Children and Family Servi
 about two thirds of cases. The 42 centre records pointing at OCFS are genuine outliers
 (all `Private`).
 
-**Not all of these links are inspection records.** Some point at the provider's own record;
+**Not all of these links address the provider.** Some point at the provider's own record;
 others are only the agency's search page:
 
 | Agency | Record-specific link | Search page only |
@@ -245,7 +245,10 @@ others are only the agency's search page:
 | OCFS | 7,028 | 5,847 |
 | DOHMH | 4,942 | 1,087 |
 
-The popup labels these two cases differently; see [AGENTS.md](AGENTS.md) for the rule.
+The popup only shows an inspections link when it leads to that provider's own record. A link
+to a bare search form would not tell you anything about the daycare you are looking at, so
+it is left out. That removes the link from **6,927 of 20,068 records (34%)**, leaving 40%
+with no inspections link at all — most often home-based providers and school-age programmes.
 
 ### Duplicate coordinates
 

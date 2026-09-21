@@ -964,8 +964,12 @@ function detailNode(p) {
   links.className = 'detail-links';
   addLink(links, 'Website', p.DOE_WEBSITE);
   addLink(links, 'MySchools', p.MYSCHOOLS_URL);
-  addLink(links, inspectionLabel('OCFS', p.OCFS_INSPECTURL), p.OCFS_INSPECTURL);
-  addLink(links, inspectionLabel('DOHMH', p.DOHMH_INSPECTION_URL), p.DOHMH_INSPECTION_URL);
+  // Only link inspections when the URL points at this provider's own record. For
+  // some providers the field is just the agency's search page, which offers the
+  // user nothing to act on, so it is left out rather than shown under a vague
+  // label.
+  if (isRecordSpecificLink(p.OCFS_INSPECTURL)) addLink(links, 'OCFS inspections', p.OCFS_INSPECTURL);
+  if (isRecordSpecificLink(p.DOHMH_INSPECTION_URL)) addLink(links, 'DOHMH inspections', p.DOHMH_INSPECTION_URL);
   addLink(links, 'About this care type', p.CARETYPE_URL);
   addLink(links, 'Google Maps directions',
     'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(p.lat + ',' + p.lng));
@@ -1036,10 +1040,6 @@ function isRecordSpecificLink(url) {
   } catch (error) {
     return false;
   }
-}
-
-function inspectionLabel(agency, url) {
-  return isRecordSpecificLink(url) ? agency + ' inspections' : 'Search ' + agency + ' records';
 }
 
 function addLink(container, label, url) {

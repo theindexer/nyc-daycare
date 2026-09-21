@@ -124,15 +124,23 @@ fallback being blocked:
 - `referrerPolicy: 'strict-origin-when-cross-origin'` left in place, in both the meta tag and
   the tile layer
 
-### Inspection link labels
+### Inspection links are omitted unless they point at the provider
 
-`OCFS_INSPECTURL` and `DOHMH_INSPECTION_URL` do not always point at the provider's own
-record — about 45% of the OCFS links are only the agency's search page.
-`isRecordSpecificLink()` decides which from the URL shape (a query parameter, or an id as
-the last path segment) and `inspectionLabel()` writes `OCFS inspections` only for a real
-record, otherwise `Search OCFS records`. Do not hard-code agency-specific URL paths: the
-heuristic was checked against all 18,904 URLs in the dataset and agrees with the literal
-patterns on every one.
+`OCFS_INSPECTURL` and `DOHMH_INSPECTION_URL` do not always address the provider's own
+record — for many they are only the agency's search page (`https://hs.ocfs.ny.gov/DCFS/`,
+`https://a816-healthpsi.nyc.gov/ChildCare/`). A search form is not something the user can
+act on, so **those are dropped entirely** rather than shown under a vague label.
+
+- `isRecordSpecificLink()` decides from the URL shape: a query parameter, or an id as the
+  last path segment (e.g. `…/GetProgramInfo/880314`, `?facilityBIN=…`).
+- `detailNode()` only emits the link when that returns true. Both agencies are treated the
+  same way.
+- Do not hard-code agency-specific URL paths. The heuristic was checked against all 18,904
+  URLs in the dataset and agrees with the literal `GetProgramInfo`/`facilityBIN` patterns on
+  every one.
+- Measured effect: 6,927 of 20,068 records lose their link, leaving **40%** with no
+  inspection link at all (Home 46%, Center 19%, School 70%). That is the intended
+  trade-off — the alternative was linking every one of them to a search box.
 
 ### The mobile map dim is a fixed scrim, not a shadow
 
