@@ -25,8 +25,9 @@ Leaflet from a CDN, served by a one-line static server.
 ./serve.sh 9000       # or pick a port
 ```
 
-`serve.sh` starts Python's built-in static server on loopback, opens your browser, and
-stops with `Ctrl+C`. It needs nothing but Python 3 — no npm, no build.
+`serve.sh` starts Python's built-in static server (on every interface, so you can also open
+it from a phone on the same wifi), opens your browser, and stops with `Ctrl+C`. It needs
+nothing but Python 3 — no npm, no build.
 
 Then open **<http://localhost:8000>**.
 
@@ -65,7 +66,8 @@ The site is plain static files, so GitHub Pages serves it directly.
    `https://<you>.github.io/<repo>/` within a minute or two.
 
 3. **Contact link — already set.** `CONTACT_URL` in `app.js` points at
-   `https://github.com/theindexer/nyc-daycare/issues`, which the sidebar footer links to.
+   `https://github.com/theindexer/nyc-daycare/issues`, which the link under *Reset filters*
+   in the Filters panel points to.
    The tile policy asks public sites to be contactable so OpenStreetMap can reach you
    before taking any action. If you ever fork or rename the repo, update this constant —
    while it contains `YOUR-USERNAME` the link hides itself rather than shipping a dead
@@ -88,7 +90,8 @@ already present so GitHub serves the files as they are.
 
 ## Features
 
-- **Map view of providers** on OpenStreetMap tiles, coloured by care type, with a legend.
+- **Map view of providers** on OpenStreetMap tiles, coloured by care type — the Care type
+  filter's swatches are the key (there is no separate legend).
 - **One pin per location.** Providers that share a coordinate — a daycare registered
   under several programmes, which is 70% of the records — collapse into a single pin
   carrying the count. Clicking it lists every programme at that address; clicking one
@@ -104,6 +107,9 @@ already present so GitHub serves the files as they are.
     month slider ("show me providers who accept an 18-month-old"). The slider exists only
     while it applies, so no control is ever greyed out.
   - Borough and community district
+- **Collapsible filter panel** — the *Filters* heading is a button, so the whole panel can
+  be folded away to give its share of the sidebar to the results list (~3 rows visible
+  becomes ~9 on desktop, ~3 to ~7 on mobile). Always starts expanded.
 - **Results list** beside the map, with a text box that filters the providers already
   loaded in the view by name, address or ZIP.
 - **Detail popup** per provider: care type, setting, ages accepted, phone, email, hours,
@@ -276,5 +282,17 @@ a data problem, not a real cluster.
 | `index.html` | Markup: header, filter/results sidebar, map container |
 | `styles.css` | Layout and styling |
 | `app.js` | All logic: query building, fetching, map/marker and list rendering |
-| `serve.sh` | Serves this folder on `http://localhost` (needs only Python 3) |
+| `icons/` | `angle-up.svg` / `angle-down.svg` — Font Awesome Free icons for the filter-panel toggle |
+| `serve.sh` | Serves this folder over HTTP (needs only Python 3) |
 | `AGENTS.md` | Engineering notes for whoever changes the code — commands, invariants, traps |
+
+## Credits
+
+- Provider data: [NYC Childcare Hub](https://data.cityofnewyork.us/) (see
+  [Data source](#data-source)).
+- Map rendering: [Leaflet](https://leafletjs.com/), [MapLibre GL JS](https://maplibre.org/)
+  and [OpenFreeMap](https://openfreemap.org/); map data © OpenStreetMap contributors, ODbL.
+- Icons: [Font Awesome Free](https://fontawesome.com/) 7.3.1 (the two angle icons in
+  `icons/`), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — the icons
+  themselves, not the Font Awesome font or code, and the licence comment is kept inside
+  each SVG.

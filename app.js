@@ -1129,7 +1129,6 @@ function buildFilterControls() {
     box.addEventListener('change', function () {
       if (box.checked) state.careTypes.add(type);
       else state.careTypes.delete(type);
-      syncLegend();
       scheduleLoad(true);
     });
     var swatch = document.createElement('span');
@@ -1157,41 +1156,6 @@ function buildFilterControls() {
     label.appendChild(document.createTextNode(setting.label));
     settingWrap.appendChild(label);
   });
-}
-
-function syncLegend() {
-  var items = dom.legend.querySelectorAll('.legend-item');
-  Array.prototype.forEach.call(items, function (item) {
-    item.classList.toggle('is-off', !state.careTypes.has(item.dataset.type));
-  });
-}
-
-function buildLegend() {
-  CARE_TYPES.forEach(function (type) {
-    var item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'legend-item';
-    item.dataset.type = type;
-    item.style.color = CARE_COLORS[type];
-    var swatch = document.createElement('span');
-    swatch.className = 'swatch';
-    var text = document.createElement('span');
-    text.className = 'label';
-    text.textContent = type;
-    text.style.color = '';
-
-    item.appendChild(swatch);
-    item.appendChild(text);
-    item.addEventListener('click', function () {
-      var box = dom.caretypeControls.querySelector('input[value="' + cssEscape(type) + '"]');
-      if (box) { box.checked = !box.checked; box.dispatchEvent(new Event('change')); }
-    });
-    dom.legend.appendChild(item);
-  });
-}
-
-function cssEscape(value) {
-  return String(value).replace(/["\\]/g, '\\$&');
 }
 
 function scheduleLoad(immediate) {
@@ -1275,7 +1239,6 @@ function resetFilters() {
   setAgeMode('any');
   dom.boroughSelect.value = '';
   syncCdSelect();
-  syncLegend();
   scheduleLoad(true);
 }
 
@@ -1304,6 +1267,8 @@ function init() {
   dom.status = $('status');
   dom.sidebar = $('sidebar');
   dom.sidebarToggle = $('sidebar-toggle');
+  dom.filtersToggle = $('filters-toggle');
+  dom.filtersBody = $('filters-body');
   dom.caretypeControls = $('caretype-controls');
   dom.settingControls = $('setting-controls');
   dom.ageRadioInputs = document.querySelectorAll('input[name="age-mode"]');
@@ -1314,7 +1279,6 @@ function init() {
   dom.cdField = $('cd-field');
   dom.cdSelect = $('cd-select');
   dom.textFilter = $('text-filter');
-  dom.legend = $('legend');
   dom.resetFilters = $('reset-filters');
   dom.resultCount = $('result-count');
   dom.resultsNote = $('results-note');
@@ -1340,7 +1304,6 @@ function init() {
   }
 
   buildFilterControls();
-  buildLegend();
   setAgeMode('any');
 
   // Single source of truth for the row height: the stylesheet reads this back.
@@ -1434,6 +1397,17 @@ function init() {
   dom.sidebarToggle.addEventListener('click', function () {
     var open = document.body.classList.toggle('sidebar-open');
     dom.sidebarToggle.setAttribute('aria-expanded', String(open));
+  });
+
+  // Collapsing the filters gives their share of the sidebar to the results list.
+  // The rows that become visible have to be rendered now: a row outside the
+  // rendered window does not exist in the DOM, so the new space would sit blank
+  // until the next scroll event.
+  dom.filtersToggle.addEventListener('click', function () {
+    var expanded = dom.filtersToggle.getAttribute('aria-expanded') !== 'false';
+    dom.filtersToggle.setAttribute('aria-expanded', String(!expanded));
+    dom.filtersBody.hidden = expanded;
+    if (state.filtered.length) renderWindow();
   });
 
   $('retry').addEventListener('click', function () { loadView(); });

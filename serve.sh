@@ -42,7 +42,7 @@ import socket, sys
 for candidate in (8000, 8080, 8081, 5500, 3000):
     try:
         probe = socket.socket()
-        probe.bind(('127.0.0.1', candidate))
+        probe.bind(('0.0.0.0', candidate))
         probe.close()
         print(candidate)
         sys.exit()
@@ -74,5 +74,5 @@ printf 'Stop with     Ctrl+C\n\n'
   fi
 ) >/dev/null 2>&1 &
 
-# Bind to loopback only: this is a local preview, not a public server.
-exec "$PYTHON" -m http.server "$PORT" --bind 127.0.0.1
+# Every interface, so a phone on the same wifi can reach it.
+exec "$PYTHON" -m http.server "$PORT"

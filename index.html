@@ -30,78 +30,91 @@
   <aside id="sidebar">
 
     <section id="filters" aria-labelledby="filters-heading">
-      <h2 id="filters-heading">Filters</h2>
+      <h2 id="filters-heading">
+        <button type="button" id="filters-toggle" class="panel-toggle"
+                aria-expanded="true" aria-controls="filters-body">
+          <!-- Icon-only: the label is visually hidden inside the button, so it names
+               both the button and the section without putting "Filters" on screen. -->
+          <img class="panel-toggle-icon icon-expanded" src="icons/angle-up.svg" alt="" width="20" height="20">
+          <img class="panel-toggle-icon icon-collapsed" src="icons/angle-down.svg" alt="" width="20" height="20">
+          <span class="sr-only">Filters</span>
+        </button>
+      </h2>
 
-      <div class="field">
-        <label class="field-label" for="text-filter">Filter results in view</label>
-        <input id="text-filter" type="search" placeholder="Name, address or ZIP&hellip;" autocomplete="off">
-        <p class="hint">Searches only the providers already loaded in the current map view.</p>
-      </div>
+      <div id="filters-body">
+        <div class="field">
+          <label class="field-label" for="text-filter">Filter results in view</label>
+          <input id="text-filter" type="search" placeholder="Name, address or ZIP&hellip;" autocomplete="off">
+          <p class="hint">Searches only the providers already loaded in the current map view.</p>
+        </div>
 
-      <fieldset class="field">
-        <legend class="field-label">Care type</legend>
-        <div id="caretype-controls" class="checklist"></div>
+        <fieldset class="field">
+          <legend class="field-label">Care type</legend>
+          <div id="caretype-controls" class="checklist"></div>
+          <div class="field-actions">
+            <button type="button" class="linkbtn" data-toggle-all="caretype">All</button>
+            <button type="button" class="linkbtn" data-toggle-all="caretype" data-mode="none">None</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend class="field-label">Setting</legend>
+          <div id="setting-controls" class="checklist"></div>
+          <div class="field-actions">
+            <button type="button" class="linkbtn" data-toggle-all="setting">All</button>
+            <button type="button" class="linkbtn" data-toggle-all="setting" data-mode="none">None</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend class="field-label">Child&rsquo;s age</legend>
+          <div class="segmented" role="radiogroup" aria-label="Filter by child&rsquo;s age">
+            <label class="segmented-option">
+              <input type="radio" name="age-mode" value="any" checked>
+              <span>Any age</span>
+            </label>
+            <label class="segmented-option">
+              <input type="radio" name="age-mode" value="specific">
+              <span>Specific age</span>
+            </label>
+          </div>
+          <div id="age-specific" class="age-specific" hidden>
+            <input id="age-slider" type="range" min="0" max="71" step="1" value="36"
+                   aria-label="Child&rsquo;s age">
+            <output id="age-value" for="age-slider">3 years</output>
+            <p class="hint">Shows providers who accept a child of exactly this age.</p>
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <label class="field-label" for="borough-select">Borough</label>
+          <select id="borough-select">
+            <option value="">All boroughs</option>
+            <option value="1">Manhattan</option>
+            <option value="2">Bronx</option>
+            <option value="3">Brooklyn</option>
+            <option value="4">Queens</option>
+            <option value="5">Staten Island</option>
+            <option value="0">Not specified</option>
+          </select>
+        </div>
+
+        <div class="field" id="cd-field" hidden>
+          <label class="field-label" for="cd-select">Community district</label>
+          <select id="cd-select"></select>
+        </div>
+
         <div class="field-actions">
-          <button type="button" class="linkbtn" data-toggle-all="caretype">All</button>
-          <button type="button" class="linkbtn" data-toggle-all="caretype" data-mode="none">None</button>
+          <button type="button" id="reset-filters" class="btn">Reset filters</button>
         </div>
-      </fieldset>
 
-      <fieldset class="field">
-        <legend class="field-label">Setting</legend>
-        <div id="setting-controls" class="checklist"></div>
-        <div class="field-actions">
-          <button type="button" class="linkbtn" data-toggle-all="setting">All</button>
-          <button type="button" class="linkbtn" data-toggle-all="setting" data-mode="none">None</button>
-        </div>
-      </fieldset>
+        <!-- Contact link: the tile policy asks public sites to be contactable, so
+             this stays on the page rather than in a footer pinned to the bottom of
+             the sidebar. app.js hides it while CONTACT_URL is a placeholder, and
+             because it carries its own spacing nothing is left behind when it does. -->
+        <a id="contact-link" class="panel-link" href="#" hidden>Report a problem or give feedback</a>
 
-      <fieldset class="field">
-        <legend class="field-label">Child&rsquo;s age</legend>
-        <div class="segmented" role="radiogroup" aria-label="Filter by child&rsquo;s age">
-          <label class="segmented-option">
-            <input type="radio" name="age-mode" value="any" checked>
-            <span>Any age</span>
-          </label>
-          <label class="segmented-option">
-            <input type="radio" name="age-mode" value="specific">
-            <span>Specific age</span>
-          </label>
-        </div>
-        <div id="age-specific" class="age-specific" hidden>
-          <input id="age-slider" type="range" min="0" max="71" step="1" value="36"
-                 aria-label="Child&rsquo;s age">
-          <output id="age-value" for="age-slider">3 years</output>
-          <p class="hint">Shows providers who accept a child of exactly this age.</p>
-        </div>
-      </fieldset>
-
-      <div class="field">
-        <label class="field-label" for="borough-select">Borough</label>
-        <select id="borough-select">
-          <option value="">All boroughs</option>
-          <option value="1">Manhattan</option>
-          <option value="2">Bronx</option>
-          <option value="3">Brooklyn</option>
-          <option value="4">Queens</option>
-          <option value="5">Staten Island</option>
-          <option value="0">Not specified</option>
-        </select>
-      </div>
-
-      <div class="field" id="cd-field" hidden>
-        <label class="field-label" for="cd-select">Community district</label>
-        <select id="cd-select"></select>
-      </div>
-
-      <div class="field-actions">
-        <button type="button" id="reset-filters" class="btn">Reset filters</button>
-      </div>
-
-      <div class="field">
-        <h3 class="field-label">Legend</h3>
-        <div id="legend" class="legend"></div>
-      </div>
+      </div><!-- /#filters-body -->
     </section>
 
     <section id="results" aria-labelledby="results-heading">
@@ -117,14 +130,6 @@
       </div>
       <p id="results-empty" class="empty" hidden>No providers match in this map view.</p>
     </section>
-
-    <footer id="site-footer">
-      <p class="footer-note">
-        Free and ad-free, built for New Yorkers. Provider data from the NYC Childcare Hub;
-        map data &copy; OpenStreetMap contributors.
-      </p>
-      <a id="contact-link" class="footer-link" href="#" hidden>Report a problem or give feedback</a>
-    </footer>
 
   </aside>
 

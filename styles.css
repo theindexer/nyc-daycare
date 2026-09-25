@@ -13,7 +13,6 @@
   --accent-soft: #e8eefc;
   --danger: #b42318;
   --sidebar-width: 380px;
-  --topbar-height: auto;
   --radius: 8px;
   --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .1);
 }
@@ -168,6 +167,54 @@ html, body {
   letter-spacing: .07em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* Collapsing the filter panel hands its share of the sidebar to the results
+   list. The control is icon-only (Font Awesome angle-up / angle-down), sized and
+   bordered like the mobile sidebar toggle so the two read as the same kind of
+   thing. The label lives in a `.sr-only` span inside the button, which names the
+   button and — through the `h2` — the section as well.
+
+   The active icon is chosen from `aria-expanded`, so the swap needs no script and
+   cannot drift from the state. Both icons are `<img>`, so they cannot inherit
+   `currentColor`; the visible feedback is the button's background, and the colour
+   baked into the SVG files (black) is the one on screen. */
+#filters h2 { margin-bottom: 0; }
+#filters-body { margin-top: 10px; }
+
+.panel-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.panel-toggle:hover { background: var(--bg); }
+
+.panel-toggle-icon { display: block; width: 20px; height: 20px; }
+
+.panel-toggle .icon-collapsed { display: none; }
+.panel-toggle[aria-expanded="false"] .icon-expanded { display: none; }
+.panel-toggle[aria-expanded="false"] .icon-collapsed { display: block; }
+
+/* Visually hidden, still in the accessibility tree: the Filters row carries no
+   visible text, so this span is what names the button and the section. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .field { margin: 0 0 14px; padding: 0; border: 0; }
@@ -336,31 +383,20 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 
 .btn:hover { background: var(--bg); }
 
-.legend { display: flex; flex-wrap: wrap; gap: 3px 12px; }
-
-.legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 0;
-  font-size: 12px;
-  color: var(--muted);
-  background: none;
-  border: 0;
-  cursor: pointer;
+/* Contact link in the Filters panel. Same quiet treatment the old sidebar footer
+   used, so it reads as a footnote to the filter list rather than another control.
+   It owns its spacing: app.js hides it when CONTACT_URL is a placeholder, and a
+   hidden link must not leave a gap behind in the filter list. */
+.panel-link {
+  display: inline-block;
+  margin: 0 0 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
 }
 
-.legend-item:hover { color: var(--text); }
-
-.legend-item .swatch {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  background: currentColor;
-}
-
-.legend-item.is-off { opacity: .4; }
-.legend-item.is-off .label { text-decoration: line-through; }
+.panel-link:hover { text-decoration: underline; }
 
 /* ---------- results ---------- */
 
@@ -479,32 +515,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   font-size: 12.5px;
   color: var(--muted);
 }
-
-/* ---------- footer ---------- */
-
-#site-footer {
-  flex: 0 0 auto;
-  padding: 10px 16px 12px;
-  border-top: 1px solid var(--border);
-}
-
-.footer-note {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--muted);
-}
-
-.footer-link {
-  display: inline-block;
-  margin-top: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.footer-link:hover { text-decoration: underline; }
 
 /* ---------- map bits ---------- */
 
@@ -670,7 +680,24 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 /* ---------- narrow screens: sidebar overlays the map ---------- */
 
 @media (max-width: 719px) {
+  /* Single column: the map owns the row under the top bar, and the sidebar
+     overlays that same row. Sharing the row — rather than positioning the
+     overlay against the viewport — is what keeps the drawer out from under the
+     top bar. Anchored at the top of the viewport it started *above* the search
+     field, and the top bar (z-index 1200) painted over the first ~115px of it,
+     so the search box could never be reached, not even by scrolling. */
+  #app {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "top"
+      "body";
+  }
+  #map-wrap { grid-area: body; }
+
   #topbar {
+    grid-area: top;
     grid-template-columns: auto 1fr;
     grid-template-areas:
       "toggle title"
@@ -687,15 +714,17 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   }
 
   #sidebar {
-    position: absolute;
+    /* Same grid area as the map, so the drawer covers the map and nothing else. */
+    grid-area: body;
     z-index: 1150;
-    top: 0;
-    left: 0;
-    /* Stop above the map's attribution bar: OpenStreetMap's policy requires
-       attribution to stay visible and not sit beneath other UI. The height is
-       measured at runtime into --attribution-height. */
-    bottom: var(--attribution-height, 34px);
+    justify-self: start;
     width: min(88vw, var(--sidebar-width));
+    /* The row runs to the bottom of the viewport, and the map's attribution bar
+       lives in the last few pixels of it. OpenStreetMap's policy requires
+       attribution to stay visible and not sit beneath other UI, so stretch only
+       as far as the bar (its height is measured at runtime into
+       --attribution-height). */
+    margin-bottom: var(--attribution-height, 34px);
     transform: translateX(-102%);
     transition: transform .18s ease-out;
   }

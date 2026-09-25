@@ -44,6 +44,16 @@ The file list itself is in [README](README.md#files). The boundaries worth knowi
 
 - **Filter controls are built in `app.js`, not `index.html`** — the markup holds empty
   containers that `buildFilterControls()` fills.
+- **The filter panel folds via `#filters-body`**, hidden by the `#filters-toggle` button in
+  its `<h2>`. The state lives in that button's `aria-expanded` (no body class, no storage);
+  the active icon is picked from that attribute in CSS, so the swap is script-free. The
+  button is icon-only — the "Filters" text is a `.sr-only` span inside it, which is what
+  names both the button and the section.
+- **The two toggle icons are `<img>`, not inline SVG**, so they cannot inherit
+  `currentColor`; they render the black baked into the files in `icons/` (Font Awesome
+  Free, CC BY 4.0 — see the README Credits section). Colour feedback has to come from the
+  button's background. Inlining the paths would be the way to get a colour-following icon.
+
 - **`styles.css` owns presentation, except `--row-height`**, which `app.js` writes at init
   (see the list invariants). It is not a free-standing style value.
 - **`app.js` is one flat classic script** — no modules, no bundler. Top-level `function`
@@ -73,6 +83,10 @@ for the whole page, against ~16,900 and ~18,000 when every row was rendered).
 - **A row outside the window does not exist.** Never reach for a row with `findCard(fid)`
   unless you know it is rendered — resolve the index with `rowIndex(fid)` and call
   `revealRow(fid)` first. `setActive()` does exactly this.
+- **Anything that resizes `#result-list` must re-run `renderWindow()`.** The window is
+  derived from `clientHeight`, so growing the list (collapsing the filter panel) leaves the
+  newly exposed space blank until something else triggers a render. `onListScroll()` covers
+  scrolling; the filters toggle calls `renderWindow()` itself.
 - `renderList()` must move the scroll position to the selected row **before** rendering, and
   highlight it after. Reversing that order loses the highlight for off-screen rows.
 - Scrolling is rAF-throttled through `onListScroll()`. Do not render the window synchronously
@@ -149,6 +163,19 @@ below the sidebar at 1150 and below the attribution at 1200, so the OSM credit s
 legible). It is deliberately **not** a `box-shadow` on `#sidebar`: a shadow is anchored to
 its element, so translating the sidebar off-screen (`translateX(-102%)`) dragged the dim
 across the whole viewport and darkened the map permanently, open or closed.
+
+### The mobile drawer shares the map's grid row
+
+On narrow screens `#app` is a single-column grid (`top` / `body`) and `#sidebar` is a grid
+item in the `body` row alongside `#map-wrap`, stretched down to `margin-bottom:
+var(--attribution-height)` so the OSM credit stays clear of it.
+
+**Do not go back to `position: absolute; top: 0` against the viewport.** That anchored the
+drawer at the top of the page, i.e. *above* the search field, while the top bar paints over
+it (1200 vs 1150) — the first ~115px of the sidebar (the search box and the top of Care
+type) was covered and unreachable at any scroll position. Sharing the row starts the drawer
+at the top bar's bottom edge and tracks its height, including when the status line rewraps,
+with no measured value to go stale.
 
 ## Tuning
 
